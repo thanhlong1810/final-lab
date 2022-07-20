@@ -1,0 +1,20 @@
+---
+- name: Determine the build dir
+  set_fact:
+    deployed_dir: "{{ ansistrano_release_path.stdout }}"
+- name: Change owner and permission of "{{ deploy_dir }}"
+  file:
+    path: "{{ dest }}"
+    state: directory
+    mode: 0775
+    recurse: yes
+    owner: "{{ user }}"
+    group: "{{ user }}"
+  become_user: root
+
+#  pm2 start yarn --interpreter bash --name nextjs -- start
+
+- name: Run build service "{{ deployed_dir }}"
+  shell: |
+    cd "{{ deployed_dir }}" && yarn
+  become_user: "{{ user }}"

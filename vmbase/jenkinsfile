@@ -1,0 +1,50 @@
+pipeline {
+    agent any
+    stages {
+        stage('Checkout') {
+            steps {
+                git branch: 'main', changelog: false, poll: false, url: 'https://github.com/thanhlong1810/final-lab.git'
+            }
+        }
+
+        stage ("Build") {
+            steps {
+                echo "Build terraform on aws"
+                withCredentials([string(credentialsId: 'AWS_ACCESS_KEY_ID', variable: 'access'), string(credentialsId: 'AWS_SECRET_ACCESS_KEY', variable: 'secret')]) {
+                    sh """
+                        export AWS_ACCESS_KEY_ID=$access
+                        export AWS_SECRET_ACCESS_KEY=$secret
+                        export AWS_REGION="ap-southeast-1"
+                        cd ${WORKSPACE}/vmbase/Terraform
+                        terraform init
+                        terraform apply --auto-approve 
+                    """                     
+                }
+            }    
+       }
+        
+        stage ("Deploy") {
+            steps {
+                echo "run ansible on aws"
+                withCredentials([string(credentialsId: 'AWS_ACCESS_KEY_ID', variable: 'access'), string(credentialsId: 'AWS_SECRET_ACCESS_KEY', variable: 'secret')]) {
+                    sh """
+                        export AWS_ACCESS_KEY_ID=$access
+                        export AWS_SECRET_ACCESS_KEY=$secret
+                        export AWS_REGION="ap-southeast-1"
+                        cd ${WORKSPACE}/vmbase/Ansible                     
+                        export ANSIBLE_CONFIG="ansible.cfg"
+                        ansible-galaxy install -r requirements.yaml --force
+                        ansible-inventory      -i inventory_aws_ec2.yml --graph
+                        ansible-playbook       -e host_name=aws_ec2 -e user=ec2-user playbook-deploy.yml -v
+                    """                     
+                }
+            }    
+       }
+    }
+    
+    post {
+    always {
+      cleanWs()
+    }
+  }
+}
