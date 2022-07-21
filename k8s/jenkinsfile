@@ -1,0 +1,56 @@
+pipeline {
+    agent any
+    
+    
+    environment { 
+    NAME = "node_landing"
+    VERSION = "1.0.${env.BUILD_ID}"
+    IMAGE = "${NAME}:${VERSION}"
+    PROJECT = 'thanhlong1810'
+    REGISTRY = 'hub.docker.com'
+    }
+
+
+    stages {
+        stage('Checkout') {
+            steps {
+                git branch: 'main', changelog: false, poll: false, url: 'https://github.com/thanhlong1810/final-lab.git'
+            }
+        }
+
+        stage ("Build") {
+            steps {
+                    echo "Running ${VERSION} on ${env.JENKINS_URL}"
+                    sh """
+                        cd ${WORKSPACE}/k8s/react-landing-page-template-2021
+                        sh 'docker build  -t ${IMAGE} .'
+                        sh "docker tag ${IMAGE} ${PROJECT}/${IMAGE}"
+                    """  
+                    withCredentials([usernamePassword(credentialsId: 'docker-login', usernameVariable: 'DOCKER_USERNAME', passwordVariable: 'DOCKER_PASSWORD')]) {
+                        sh 'echo $DOCKER_PASSWORD | docker login $REGISTRY --username $DOCKER_USERNAME --password-stdin'
+                        sh "docker push ${PROJECT}/${IMAGE}"
+                }                   
+            }
+        }    
+       
+        
+        stage ("Deploy") {
+            steps {
+                echo "deployment on k8s"
+                sh """
+                    cd ${WORKSPACE}/k8s
+                    echo $DOCKER_TAG
+                    sed -i 's/__docker-tag__/$DOCKER_TAG/g' values.yaml
+                    helm upgrade --install final-lab ./templates \
+                        -f values.yaml -n final-lab
+                    """
+            }    
+       }
+    }
+    
+    post {
+    always {
+      cleanWs()
+    }
+  }
+}
